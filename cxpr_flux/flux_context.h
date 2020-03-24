@@ -7,38 +7,38 @@ namespace cxpr_flux
 	//////////////////////////////////////////////////////////////////////////
 
 	template <typename derived_t>
-	class FluxStoreBase
+	class flux_store
 	{
 	public:
-		constexpr FluxStoreBase() noexcept = default;
-		constexpr FluxStoreBase(FluxStoreBase&& other) noexcept : onChanged(std::move(other.onChanged)) {}
+		constexpr flux_store() noexcept = default;
+		constexpr flux_store(flux_store&& other) noexcept : onChanged(std::move(other.onChanged)) {}
 
-		FluxStoreBase& operator=(FluxStoreBase&& other)
+		flux_store& operator=(flux_store&& other)
 		{
 			onChanged = std::move(other.onChanged);
 			return *this;
 		}
 
 		template <typename functor_t>
-		void AddListener(void* owner, functor_t&& fun) noexcept
+		void addListener(void* owner, functor_t&& fun) const noexcept
 		{
 			onChanged.registerCallback(owner, std::forward<functor_t>(fun));
 		}
 
 	protected:
-		void EmitChanged()
+		void emitChanged()
 		{
 			onChanged.call(static_cast<derived_t&>(*this));
 		}
 
 	private:
-		callback_list<void(const derived_t&)> onChanged;
-	};
+		mutable callback_list<void(const derived_t&)> onChanged;
+	};	
 
 	//////////////////////////////////////////////////////////////////////////
 
 	template <typename _store_t, typename context_t>
-	class FluxStoreFacade
+	class flux_store_facade
 	{
 	public:
 		using store_t = _store_t;
@@ -50,7 +50,7 @@ namespace cxpr_flux
 		using rebind_alloc_t =
 			typename std::allocator_traits<allocator_t>::template rebind_alloc<T>;
 
-		constexpr FluxStoreFacade(context_t& _ctx, const allocator_t& _allocator) noexcept
+		constexpr flux_store_facade(context_t& _ctx, const allocator_t& _allocator) noexcept
 			: context(_ctx), allocator(_allocator), stores(allocator) {}
 
 		template <typename ... params_t>
@@ -109,12 +109,12 @@ namespace cxpr_flux
 		using my_t = static_store_collection<allocator_t, stores_t...>;
 
 		template <typename store_t>
-		using facade_t = FluxStoreFacade<store_t, context_t>;
+		using facade_t = flux_store_facade<store_t, context_t>;
 
-		using stores_tuple_t = std::tuple<FluxStoreFacade<stores_t, context_t>...>;
+		using stores_tuple_t = std::tuple<flux_store_facade<stores_t, context_t>...>;
 
 		constexpr static_store_collection(context_t& _ctx, const allocator_t& allocator) noexcept
-			: stores{ stores_tuple_t{ FluxStoreFacade<stores_t, context_t>( _ctx, allocator)... } }
+			: stores{ stores_tuple_t{ flux_store_facade<stores_t, context_t>( _ctx, allocator)... } }
 		{}
 
 		template <typename store_t, typename ... params_t>
@@ -135,13 +135,13 @@ namespace cxpr_flux
 		constexpr void onCreate(void* owner, callback_t&& cb)
 		{
 			cxpr::find_tuple_type<facade_t<store_t>>(stores)
-				.onCreateCbs.RegisterCallback(owner, std::forward<callback_t>(cb));
+				.onCreateCbs.registerCallback(owner, std::forward<callback_t>(cb));
 		}
 		template <typename store_t, typename callback_t>
 		constexpr void onDestroy(void* owner, callback_t&& cb)
 		{
 			cxpr::find_tuple_type<facade_t<store_t>>(stores)
-				.onDestroyCbs.RegisterCallback(owner, std::forward<callback_t>(cb));
+				.onDestroyCbs.registerCallback(owner, std::forward<callback_t>(cb));
 		}
 
 		template <typename signal_t>

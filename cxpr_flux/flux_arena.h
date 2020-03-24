@@ -67,7 +67,7 @@ namespace cxpr_flux
 			if ((alignedHead + totalSize) < memEnd)
 			{
 				control.currentAllocations++;
-				control.currentSize += (totalSize);
+				control.currentSize += static_cast<unsigned int>(totalSize);
 				return reinterpret_cast<void*>(alignedHead);
 			}
 			else

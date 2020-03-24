@@ -12,15 +12,18 @@ namespace cxpr_flux
 		template <typename ... Ts>
 		struct flux_container_state
 		{
+			bool isDirty = false;
 			std::tuple<typename Ts::state_t...> states;
 
-			flux_container_state(Ts&... stores) : states{}
+			template <typename ... Ts>
+			flux_container_state(Ts&&... stores) : states{}
 			{
 				// giant fold statement
-				(stores.AddListener(this, [this](const auto& newState)
+				(stores.addListener(this, [this](const auto& newState)
 				{
 					using payload_t = typename std::decay_t<decltype(newState)>::state_t;
 					cxpr::find_tuple_type<payload_t>(states) = newState.getState();
+					isDirty = true;
 				}), ...);
 			}
 		};
@@ -29,7 +32,7 @@ namespace cxpr_flux
 	//////////////////////////////////////////////////////////////////////////
 	// flux_container
 	// Binding class between the flux context and the view. Listens to all states in (Ts...) for changes
-	// and updates it's internal state accordingly. Render() generates a new view_t based on the current state
+	// and updates it's internal state accordingly.
 	template <typename ... Ts>
 	struct flux_container
 	{
@@ -45,20 +48,45 @@ namespace cxpr_flux
 			state = std::make_unique<state_t>(*context.getStores().template createStore<Ts>()...);
 		}
 
+		template <typename ... Ts>
+		void bindExisting(Ts&&... params)
+		{
+			// create our internal state as well as create & bind to context states
+			state = std::make_unique<state_t>(perfect_forward(params));
+		}
+
 		template <typename store_t>
 		decltype(auto) getState() const {
 			// fetches the current state out of the state tuple
 			return cxpr::find_tuple_type<typename store_t::state_t>(state->states);
 		}
 
+		bool getResetDirty() { auto dirty = state->isDirty;  state->isDirty = false; }
+
 		std::unique_ptr<state_t> state;
 	};
 
+	////////////////////////////////////////////////////////////////////////////
+	//// Helper to infer context type when creating a container 
+	//template <template <typename, typename> class container_t, typename view_t, typename context_t>
+	//decltype(auto) create_container(context_t& ctx)
+	//{
+	//	return container_t<context_t, view_t>(ctx);
+	//}
+
 	//////////////////////////////////////////////////////////////////////////
 	// Helper to infer context type when creating a container 
-	template <template <typename, typename> class container_t, typename view_t, typename context_t>
-	decltype(auto) create_container(context_t& ctx)
+	template <template <typename, typename> class container_t, typename view_t, typename context_t, typename ... Ts>
+	decltype(auto) create_container_view(context_t& ctx, Ts&&... params)
 	{
-		return container_t<context_t, view_t>(ctx);
+		return container_t<context_t, view_t>(ctx, perfect_forward(params));
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+	// Helper to infer context type when creating a container 
+	template <template <typename, typename> class container_t, typename context_t, typename ... Ts>
+	decltype(auto) create_container(context_t& ctx, Ts&&... params)
+	{
+		return container_t<context_t>(ctx, perfect_forward(params));
 	}
 }

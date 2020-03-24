@@ -134,6 +134,8 @@ namespace cxpr_flux
 			return impl;
 		}
 
+		constexpr operator bool() const { return impl != nullptr; }
+
 	private:
 		static constexpr size_t max_internal_sz = 24; // 24 + 8 = 32, which is a nicely aligned size
 		using internal_t = __detail::bound_function_impl<ret_t(params_t ...)>;

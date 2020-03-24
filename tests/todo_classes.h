@@ -33,9 +33,9 @@ namespace todo_test
 	// TodoStore.
 	// Maintains a list of all todo's currently in the system. Single point of state
 	// for todos
-	struct TodoStore : public cxpr_flux::FluxStoreBase<TodoStore>
+	struct TodoStore : public cxpr_flux::flux_store<TodoStore>
 	{
-		using cxpr_flux::FluxStoreBase<TodoStore>::FluxStoreBase;
+		using cxpr_flux::flux_store<TodoStore>::flux_store;
 		struct todoState
 		{
 			int id;
@@ -54,7 +54,7 @@ namespace todo_test
 					[](TodoStore& self, const signals::addTodo& changes, auto& context)
 					{
 						self.newTodo(changes);
-						self.EmitChanged();
+						self.emitChanged();
 						return true;
 					}
 				),
@@ -63,7 +63,7 @@ namespace todo_test
 					[](TodoStore& self, const signals::deleteTodo& changes, auto& context)
 					{
 						self.deleteTodo(changes);
-						self.EmitChanged();
+						self.emitChanged();
 						return true;
 					}
 				),
@@ -88,13 +88,13 @@ namespace todo_test
 			newState.complete = false;
 			newState.id = counter++;
 			todos.push_back(std::move(newState));
-			EmitChanged();
+			emitChanged();
 		}
 
 		void deleteTodo(const signals::deleteTodo& changes)
 		{
 			todos.erase(std::find_if(std::begin(todos), std::end(todos), [&](const auto& it) { return it.id == changes.id; }));
-			EmitChanged();
+			emitChanged();
 		}
 
 		void toggleTodo(const signals::toggleTodo& changes)
@@ -105,7 +105,7 @@ namespace todo_test
 				found->complete = !found->complete;
 
 			}
-			EmitChanged();
+			emitChanged();
 		}
 
 		int counter = 0;
