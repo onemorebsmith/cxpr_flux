@@ -49,17 +49,17 @@ namespace cxpr_flux
 	// When bind_lambda is called, the proper derived type (bound_lambda<ret_t(params_t ...)>) is allocated
 	// within the internal buffer of the callback. Note: this callback + it's captures must be <= the size of 
 	// the internal buffer or it'll throw a compiler error.
-	template<typename signature_t>
-	struct flux_callback;
+	template<size_t capture_size, typename signature_t>
+	struct flux_callback_base;
 
-	template<typename ret_t, typename ... params_t>
-	struct flux_callback<ret_t(params_t ...)>
+	template<size_t capture_size, typename ret_t, typename ... params_t>
+	struct flux_callback_base<capture_size, ret_t(params_t ...)>
 	{
 	public:
-		using my_t = flux_callback<ret_t(params_t ...)>;
+		using my_t = flux_callback_base<capture_size, ret_t(params_t ...)>;
 
-		constexpr flux_callback() noexcept : impl(nullptr), inline_mem{} {}
-		~flux_callback()
+		constexpr flux_callback_base() noexcept : impl(nullptr), inline_mem{} {}
+		~flux_callback_base()
 		{
 			if (impl != nullptr)
 			{
@@ -67,12 +67,12 @@ namespace cxpr_flux
 			}
 		}
 
-		constexpr flux_callback(const my_t& other) noexcept
+		constexpr flux_callback_base(const my_t& other) noexcept
 		{
 			assign(other);
 		}
 
-		flux_callback& operator=(const my_t& other) noexcept
+		flux_callback_base& operator=(const my_t& other) noexcept
 		{
 			assign(other);
 			return *this;
@@ -92,7 +92,7 @@ namespace cxpr_flux
 			}
 		}
 
-		constexpr flux_callback(my_t&& other) noexcept
+		constexpr flux_callback_base(my_t&& other) noexcept
 		{
 			move_impl(std::move(other));
 		}
@@ -126,6 +126,29 @@ namespace cxpr_flux
 			}
 		}
 
+		template <typename ... Ts>
+		decltype(auto) operator()(Ts&&... p) const 
+		{
+			if constexpr (std::is_same_v<ret_t, void>)
+			{
+				// void return, no optional
+				if (impl != nullptr)
+				{
+					(*(impl))(perfect_forward(p));
+				}
+			}
+			else
+			{
+				// non-void return, no optional
+				if (impl != nullptr)
+				{
+					return (*(impl))(perfect_forward(p));
+				}
+
+				return std::optional<ret_t>{};
+			}
+		}
+
 		template <typename lambda_t>
 		decltype(auto) bind_lambda(lambda_t&& lam)
 		{
@@ -137,7 +160,7 @@ namespace cxpr_flux
 		constexpr operator bool() const { return impl != nullptr; }
 
 	private:
-		static constexpr size_t max_internal_sz = 24; // 24 + 8 = 32, which is a nicely aligned size
+		static constexpr size_t max_internal_sz = capture_size; // 24 + 8 = 32, which is a nicely aligned size
 		using internal_t = __detail::bound_function_impl<ret_t(params_t ...)>;
 
 		void move_impl(my_t&& other)
@@ -148,37 +171,56 @@ namespace cxpr_flux
 				memcpy(inline_mem, other.inline_mem, sizeof(inline_mem));
 				impl = (internal_t*)(inline_mem + offset);
 				other.impl = nullptr;
-
-				other.impl = nullptr;
 			}
 		}
 
 		internal_t* impl = nullptr;
-		alignas(std::alignment_of_v<internal_t>) char inline_mem[24];
+		alignas(std::alignment_of_v<internal_t>) char inline_mem[max_internal_sz];
 	};
+
+	static constexpr size_t small_callback_size = 24;
+	static constexpr size_t big_callback_size = 104;
+
+	template <typename sig_t> // 32 bit total size
+	using flux_callback = flux_callback_base<small_callback_size, sig_t>;
+
+	template <typename sig_t>  // 128 bit total size
+	using flux_big_callback = flux_callback_base<big_callback_size, sig_t>;
 
 	//////////////////////////////////////////////////////////////////////////
 	// callback_list
 	// Wrapper for a vector of callbacks. All callbacks will be invoked on a call to ()
-	template <typename sig_t, typename allocator_t = std::allocator<void>>
-	class callback_list
+	template <size_t lambda_size, typename sig_t, typename allocator_t = std::allocator<void>>
+	class callback_list_base
 	{
 	public:
 		template <typename T>
 		using rebind_alloc_t =
 			typename std::allocator_traits<allocator_t>::template rebind_alloc<T>;
 
-		constexpr callback_list() = default;
-		~callback_list() = default;
+		using callback_t = flux_callback_base<lambda_size, sig_t>;
 
-		constexpr callback_list(callback_list&& other) noexcept : callbacks(std::move(other.callbacks)) {}
-		callback_list& operator=(callback_list&& other) noexcept { callbacks = std::move(other.callbacks); return *this; }
+		constexpr callback_list_base() = default;
+		~callback_list_base() = default;
+
+		constexpr callback_list_base(callback_list_base&& other) noexcept 
+			: callbacks(std::move(other.callbacks)) {}
+		callback_list_base& operator=(callback_list_base&& other) noexcept 
+		{ callbacks = std::move(other.callbacks); return *this; }
 
 		template <typename lambda_t>
 		void registerCallback(void* owner, lambda_t&& lam)
 		{
-			callbacks.emplace_back(std::make_pair(owner, flux_callback<sig_t>()))
-				.second.bind_lambda(std::forward<lambda_t>(lam));
+			using decayed_t = std::decay_t<lambda_t>;
+			if constexpr (std::is_same_v<decayed_t, callback_t>)
+			{	// no need to wrap, already wrapped in a flux_callback
+				callbacks.emplace_back(std::make_pair(owner, std::forward<lambda_t>(lam)));
+			}
+			else
+			{	// naked lambda, need to wrap to stor
+				callbacks.emplace_back(std::make_pair(owner, callback_t()))
+					.second.bind_lambda(std::forward<lambda_t>(lam));
+			}
 		}
 
 		template <typename ...  Ts>
@@ -191,8 +233,14 @@ namespace cxpr_flux
 		}
 
 	private:
-		using entry_pair = std::pair<void*, flux_callback<sig_t>>;
+		using entry_pair = std::pair<void*, callback_t>;
 
 		std::vector<entry_pair, rebind_alloc_t<entry_pair>> callbacks;
 	};
+
+	template <typename sig_t>
+	using callback_list = callback_list_base<small_callback_size, sig_t>;
+
+	template <typename sig_t>
+	using big_callback_list = callback_list_base<big_callback_size, sig_t>;
 }

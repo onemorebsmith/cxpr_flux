@@ -33,8 +33,8 @@ namespace cxpr_flux
 		{
 			try
 			{
-				auto created = currentAllocator->construct<signal_impl_t<payload_t>>
-					("Signal", std::move(payload));
+				auto created = currentAllocator->construct<signal_impl_t<std::decay_t<payload_t>>>
+					("Signal", std::forward<payload_t>(payload));
 
 				//BSTL::Threading::RAIISpinlock spinlock(lock);
 				if (head == nullptr)
@@ -66,9 +66,6 @@ namespace cxpr_flux
 			while (currentSignal != nullptr)
 			{
 				nHandled += functor(*currentSignal);
-				//nHandled += currentSignal->dispatch(this);
-
-				//nHandled += functor(*currentSignal);
 				currentSignal = currentSignal->next;
 				nDispatched++;
 			}
