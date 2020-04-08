@@ -34,7 +34,7 @@ namespace __arena_tests
 TEST(arena_allocator_tests, arena_allocator_raw_alloc)
 {
 	using namespace __arena_tests;
-	using allocator_t = cxpr_flux::arena_allocator<1024 * 8>;
+	using allocator_t = cxpr_flux::arena_allocator<std::allocator<void>, 1024 * 8>;
 	static constexpr int nObjects = 64;
 	static constexpr int nIterations = 1000;
 
@@ -86,43 +86,25 @@ TEST(arena_allocator_tests, arena_allocator_raw_alloc)
 TEST(arena_allocator_tests, saturate_test)
 {
 	using namespace __arena_tests;
-	using allocator_t = cxpr_flux::arena_allocator<1024 * 8>;
+	using allocator_t = cxpr_flux::arena_allocator<std::allocator<void>, 1024 * 8>;
 	{	// saturate using type with a non-trivial destructor
 		std::unique_ptr<allocator_t> allocator = std::make_unique<allocator_t>();
-		try
+		// we should not overflow the allocator here, it should start chaining
+		for (int i = 0; i < 100000; i++)
 		{
-			// we should overflow the allocator here
-			for (int i = 0; i < 100000; i++)
-			{
-				auto d = allocator->construct<destructor_test>("", i);
-				EXPECT_EQ(d->i, i);
-			}
-
-			FAIL() << "arena_allocator didn't throw as expected ";
-		}
-		catch (const std::bad_alloc&)
-		{
-			SUCCEED();
+			auto d = allocator->construct<destructor_test>("", i);
+			EXPECT_EQ(d->i, i);
 		}
 	}
 
 	{	// saturate using type with a trivial destructor
 		std::unique_ptr<allocator_t> allocator = std::make_unique<allocator_t>();
-		try
+		// we should not overflow the allocator here, it should start chaining
+		for (int i = 0; i < 100000; i++)
 		{
-			// we should overflow the allocator here
-			for (int i = 0; i < 100000; i++)
-			{
-				const float val = static_cast<float>(i);
-				auto d = allocator->construct<float>("", val);
-				EXPECT_EQ(*d, val);
-			}
-
-			FAIL() << "arena_allocator didn't throw as expected ";
-		}
-		catch (const std::bad_alloc&)
-		{
-			SUCCEED();
+			const float val = static_cast<float>(i);
+			auto d = allocator->construct<float>("", val);
+			EXPECT_EQ(*d, val);
 		}
 	}
 }
@@ -132,7 +114,7 @@ TEST(arena_allocator_tests, saturate_test)
 TEST(arena_allocator_tests, move_semantics_test)
 {
 	using namespace __arena_tests;
-	using allocator_t = cxpr_flux::arena_allocator<1024 * 8>;
+	using allocator_t = cxpr_flux::arena_allocator<std::allocator<void>, 1024 * 8>;
 	static constexpr int nObjects = 64;
 
 	destructorCounter = 0;

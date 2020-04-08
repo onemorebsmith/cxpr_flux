@@ -22,7 +22,7 @@ TEST(flux_tests, todo_test)
 
 	{		
 		cxpr_flux::flux_static_context<std::allocator<void>, TodoStore> ctx;
-		auto appContainer = cxpr_flux::create_container<AppContainer, AppView>(ctx);
+		auto appContainer = cxpr_flux::create_container_view<AppContainer, AppView>(ctx);
 
 		// Add a todo
 		ctx.getDispatcher().signal(

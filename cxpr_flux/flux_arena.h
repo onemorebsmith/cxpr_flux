@@ -47,6 +47,13 @@ namespace cxpr_flux
 			control.currentSize = sizeof(control_block);
 		}
 
+		constexpr arena_allocator(arena_allocator&& other) noexcept
+			: control{}
+		{
+			memcpy(_mem, other._mem, max_sz); // this copies the control block also
+			memset(other._mem, 0, max_sz);  // this zeros the size and nulls out control block also 
+		}
+
 		//constexpr arena_allocator(arena_allocator&& other) noexcept
 		//	: control{}
 		//{
