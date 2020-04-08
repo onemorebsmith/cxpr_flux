@@ -13,6 +13,7 @@
 
 #endif
 
+#include "flux_spinlock.h"
 #include "flux_allocator.h"
 #include "flux_signal.h"
 #include "flux_callback.h"

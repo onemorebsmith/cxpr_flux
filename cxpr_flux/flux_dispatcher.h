@@ -13,7 +13,7 @@ namespace cxpr_flux
 		template <typename T>
 		using signal_impl_t = flux_signal_impl<my_t,T>;
 		using allocator_wrapper_t = stl_allocator_helper<allocator_t>;
-		using arena_t = cxpr_flux::arena_allocator<1024 * 32>;
+		using arena_t = cxpr_flux::arena_allocator<allocator_t, 1024 * 32>;
 
 		template <typename T>
 		using uniq_ptr = typename allocator_wrapper_t::template uniq_ptr<T>;
@@ -33,10 +33,10 @@ namespace cxpr_flux
 		{
 			try
 			{
+				auto ll = lock.scoped_lock();
 				auto created = currentAllocator->construct<signal_impl_t<std::decay_t<payload_t>>>
 					("Signal", std::forward<payload_t>(payload));
 
-				//BSTL::Threading::RAIISpinlock spinlock(lock);
 				if (head == nullptr)
 				{
 					head = created;
@@ -61,6 +61,7 @@ namespace cxpr_flux
 			auto dispatcherState = swap_state();
 			int nDispatched = 0;
 
+			auto ll = lock.scoped_lock();
 			int nHandled = 0;
 			auto currentSignal = dispatcherState.head;
 			while (currentSignal != nullptr)
@@ -85,7 +86,7 @@ namespace cxpr_flux
 
 		[[nodiscard]] dispatcher_context swap_state()
 		{
-			//BSTL::Threading::RAIISpinlock spinlock(lock);
+			auto ll = lock.scoped_lock();
 			dispatcher_context contextOut = {};
 			contextOut.head = head;
 			contextOut.tail = tail;
@@ -107,7 +108,7 @@ namespace cxpr_flux
 			return std::move(contextOut);
 		}
 
-
+		flux_spinlock lock;
 		allocator_t allocator;
 		uniq_ptr<arena_t> arenaA;
 		uniq_ptr<arena_t> arenaB;

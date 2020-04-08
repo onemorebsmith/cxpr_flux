@@ -13,7 +13,8 @@ namespace cxpr_flux
 		struct flux_container_state
 		{
 			bool isDirty = false;
-			std::tuple<typename Ts::state_t...> states;
+			bool isReady = false;
+			std::tuple<typename Ts::state_t...> states = {};
 
 			template <typename ... Ts>
 			flux_container_state(Ts&&... stores) : states{}
@@ -21,6 +22,7 @@ namespace cxpr_flux
 				// giant fold statement
 				(stores.addListener(this, [this](const auto& newState)
 				{
+					isReady = true;
 					using payload_t = typename std::decay_t<decltype(newState)>::state_t;
 					cxpr::find_tuple_type<payload_t>(states) = newState.getState();
 					isDirty = true;
@@ -56,9 +58,13 @@ namespace cxpr_flux
 		}
 
 		template <typename store_t>
-		decltype(auto) getState() const {
+		const typename store_t::state_t& getState() const {
 			// fetches the current state out of the state tuple
 			return cxpr::find_tuple_type<typename store_t::state_t>(state->states);
+		}
+
+		bool isReady() const {
+			return (state != nullptr) && (state->isReady);
 		}
 
 		bool getResetDirty() { auto dirty = state->isDirty;  state->isDirty = false; }

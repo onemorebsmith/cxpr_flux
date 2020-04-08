@@ -100,6 +100,7 @@ namespace cxpr_flux
 		constexpr my_t& operator=(my_t&& other) noexcept
 		{
 			move_impl(std::move(other));
+			return *this;
 		}
 		
 		// Invokes the wrapped function and returns the result in std::optional<ret_t>
@@ -178,7 +179,7 @@ namespace cxpr_flux
 		alignas(std::alignment_of_v<internal_t>) char inline_mem[max_internal_sz];
 	};
 
-	static constexpr size_t small_callback_size = 24;
+	static constexpr size_t small_callback_size = 24;	// 32 bit total size
 	static constexpr size_t big_callback_size = 104;
 
 	template <typename sig_t> // 32 bit total size
@@ -230,6 +231,15 @@ namespace cxpr_flux
 			{
 				it.second(perfect_forward(params));
 			}
+		}
+
+		constexpr void clearCallback(void* owner)
+		{
+			callbacks.erase(std::find_if(std::begin(callbacks), std::end(callbacks), 
+				[&](const auto& entry)
+			{
+				return entry.first == owner;
+			}));
 		}
 
 	private:

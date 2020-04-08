@@ -191,7 +191,7 @@ namespace todo_test
 			return created;
 		}
 
-		view_t Render()
+		[no_discard] view_t Render()
 		{
 			return view_t(GetState());
 		}
