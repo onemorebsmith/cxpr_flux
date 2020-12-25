@@ -26,8 +26,11 @@ namespace cxpr_flux
 					using payload_t = typename std::decay_t<decltype(newState)>::state_t;
 					cxpr::find_tuple_type<payload_t>(states) = newState.getState();
 					isDirty = true;
+					onChanged.call();
 				}), ...);
 			}
+
+			cxpr_flux::callback_list<void()> onChanged;
 		};
 	}
 
@@ -65,6 +68,13 @@ namespace cxpr_flux
 
 		bool isReady() const {
 			return (state != nullptr) && (state->isReady);
+		}
+
+
+		template <typename functor_t>
+		void addListener(void* owner, functor_t&& fun) const noexcept
+		{
+			state->onChanged.registerCallback(owner, std::forward<functor_t>(fun));
 		}
 
 		bool getResetDirty() { auto dirty = state->isDirty;  state->isDirty = false; }

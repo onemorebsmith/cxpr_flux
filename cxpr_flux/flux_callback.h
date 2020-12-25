@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 //////////////////////////////////////////////////////////////////////////
 
 namespace cxpr_flux
@@ -57,8 +59,9 @@ namespace cxpr_flux
 	{
 	public:
 		using my_t = flux_callback_base<capture_size, ret_t(params_t ...)>;
+		static constexpr int sentinel_value = 1234567;
 
-		constexpr flux_callback_base() noexcept : impl(nullptr), inline_mem{} {}
+		constexpr flux_callback_base() noexcept : impl(nullptr), inline_mem{}, sentinel{ sentinel_value }{}
 		~flux_callback_base()
 		{
 			if (impl != nullptr)
@@ -80,6 +83,8 @@ namespace cxpr_flux
 
 		void assign(const my_t& other)
 		{
+			sentinel = other.sentinel;
+			precondition_check(sentinel == sentinel_value);
 			if (impl != nullptr)
 			{
 				impl->~internal_t();
@@ -94,11 +99,13 @@ namespace cxpr_flux
 
 		constexpr flux_callback_base(my_t&& other) noexcept
 		{
+			sentinel = other.sentinel;
 			move_impl(std::move(other));
 		}
 
 		constexpr my_t& operator=(my_t&& other) noexcept
 		{
+			sentinel = other.sentinel;
 			move_impl(std::move(other));
 			return *this;
 		}
@@ -153,10 +160,26 @@ namespace cxpr_flux
 		template <typename lambda_t>
 		decltype(auto) bind_lambda(lambda_t&& lam)
 		{
-			static_assert(sizeof(lam) <= max_internal_sz, "lambda is too large, reduce capture list");
+			precondition_check(sentinel == sentinel_value);
+			auto offset = (__int64)(inline_mem) % std::alignment_of_v<lambda_t>;
+			auto sz = sizeof(__detail::bound_lambda<lambda_t, ret_t(params_t ...)>);
+			static_assert(bound_payload_size<lambda_t>() <= max_internal_sz, "lambda is too large, reduce capture list");
 			impl = new (inline_mem) __detail::bound_lambda<lambda_t, ret_t(params_t ...)>(std::forward<lambda_t>(lam));
+			precondition_check(sentinel == sentinel_value);
 			return impl;
 		}
+
+		template <typename obj_t, typename functor_t, typename ... params_t>
+		decltype(auto) bind_member(obj_t& obj, functor_t& fun, params_t&&... params)
+		{
+			precondition_check(sentinel == sentinel_value);
+			precondition_check(sentinel == sentinel_value);
+			return impl;
+		}
+
+
+		template <typename lambda_t>
+		static constexpr size_t bound_payload_size() { return sizeof(__detail::bound_lambda<lambda_t, ret_t(params_t ...)>); };
 
 		constexpr operator bool() const { return impl != nullptr; }
 
@@ -177,6 +200,7 @@ namespace cxpr_flux
 
 		internal_t* impl = nullptr;
 		alignas(std::alignment_of_v<internal_t>) char inline_mem[max_internal_sz];
+		int sentinel;
 	};
 
 	static constexpr size_t small_callback_size = 24;	// 32 bit total size
@@ -187,6 +211,7 @@ namespace cxpr_flux
 
 	template <typename sig_t>  // 128 bit total size
 	using flux_big_callback = flux_callback_base<big_callback_size, sig_t>;
+
 
 	//////////////////////////////////////////////////////////////////////////
 	// callback_list
@@ -235,11 +260,14 @@ namespace cxpr_flux
 
 		constexpr void clearCallback(void* owner)
 		{
-			callbacks.erase(std::find_if(std::begin(callbacks), std::end(callbacks), 
-				[&](const auto& entry)
+			if (callbacks.size() > 0)
 			{
-				return entry.first == owner;
-			}));
+				callbacks.erase(std::find_if(std::begin(callbacks), std::end(callbacks),
+					[&](const auto& entry)
+				{
+					return entry.first == owner;
+				}));
+			}
 		}
 
 	private:
