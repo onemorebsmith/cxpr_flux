@@ -24,7 +24,7 @@ namespace cxpr_flux
 				{
 					isReady = true;
 					using payload_t = typename std::decay_t<decltype(newState)>::state_t;
-					cxpr::find_tuple_type<payload_t>(states) = newState.getState();
+					cxpr::first_match<payload_t>(states) = newState.getState();
 					isDirty = true;
 				}), ...);
 			}
@@ -60,7 +60,7 @@ namespace cxpr_flux
 		template <typename store_t>
 		const typename store_t::state_t& getState() const {
 			// fetches the current state out of the state tuple
-			return cxpr::find_tuple_type<typename store_t::state_t>(state->states);
+			return cxpr::first_match<typename store_t::state_t>(state->states);
 		}
 
 		bool isReady() const {

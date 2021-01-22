@@ -120,7 +120,7 @@ namespace cxpr_flux
 		template <typename store_t, typename ... params_t>
 		constexpr decltype(auto) createStore(param_pack_t params) noexcept
 		{
-			return cxpr::find_tuple_type<facade_t<store_t>>(stores)
+			return cxpr::first_match<facade_t<store_t>>(stores)
 				.CreateStore(perfect_forward(params));
 		}
 
